@@ -1,0 +1,32 @@
+version: 0.2
+
+# CodeBuild 按 PR 事件触发:
+#   PR 创建/更新 → 构建镜像 + 部署独立环境
+#   PR 合并     → 清理该环境
+# 项目级环境变量(在 CodeBuild 控制台配置):
+#   ECR_REPO, DEPLOY_ROLE_ARN, VPC_ID, SUBNETS, SG_ECS,
+#   LISTENER_ARN, ALB_DNS, DOMAIN, CF_ZONE_ID
+# 敏感值从 SSM 参数库读取,不落明文:
+env:
+  parameter-store:
+    CF_API_TOKEN: /homework/cf-api-token
+
+phases:
+  pre_build:
+    commands:
+      # webhook 触发器形如 "pr/123",取出 PR 编号
+      - export PR_NUMBER=$(echo "$CODEBUILD_WEBHOOK_TRIGGER" | cut -d/ -f2)
+      - echo "PR=$PR_NUMBER event=$CODEBUILD_WEBHOOK_EVENT"
+      - export ECR_HOST=$(echo "$ECR_REPO" | cut -d/ -f1)
+      - aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR_HOST"
+
+  build:
+    commands:
+      - |
+        if [ "$CODEBUILD_WEBHOOK_EVENT" = "PULL_REQUEST_MERGED" ]; then
+          bash scripts/cleanup-pr.sh
+        else
+          docker build -t "$ECR_REPO:pr-$PR_NUMBER" .
+          docker push "$ECR_REPO:pr-$PR_NUMBER"
+          bash scripts/deploy-pr.sh
+        fi

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的 GitHub 个人介绍</title>
+  <style>
+    body { font-family: -apple-system, "PingFang SC", sans-serif; background: #f5f6f8; margin: 0;
+           display: flex; justify-content: center; padding-top: 8vh; }
+    .card { background: #fff; border-radius: 14px; padding: 32px; max-width: 460px; width: 90%;
+            box-shadow: 0 4px 16px rgba(0,0,0,.08); text-align: center; }
+    img { width: 96px; height: 96px; border-radius: 50%; }
+    h1 { font-size: 22px; margin: 12px 0 4px; }
+    .login { color: #888; font-size: 14px; margin-bottom: 16px; }
+    .intro { text-align: left; line-height: 1.8; color: #333; }
+    .meta { color: #aaa; font-size: 12px; margin-top: 16px; }
+    button { margin-top: 16px; padding: 8px 20px; border: none; border-radius: 8px;
+             background: #24292f; color: #fff; cursor: pointer; }
+    button:hover { background: #444; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="content">加载中…</div>
+    <button onclick="sync()">重新从 GitHub 同步</button>
+  </div>
+  <script>
+    async function load() {
+      const el = document.getElementById('content');
+      const res = await fetch('/api/profile');
+      if (!res.ok) { el.textContent = '还没有数据，点下面按钮从 GitHub 同步'; return; }
+      const p = await res.json();
+      el.innerHTML = `
+        <img src="${p.avatar_url}" alt="avatar">
+        <h1>${p.name || p.login}</h1>
+        <div class="login">@${p.login}</div>
+        <p class="intro">${p.intro}</p>
+        <div class="meta">更新时间：${new Date(p.updated_at).toLocaleString()}</div>`;
+    }
+    async function sync() {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      if (!res.ok) { alert('同步失败：' + (await res.json()).error); return; }
+      load();
+    }
+    load();
+  </script>
+</body>
+</html>
