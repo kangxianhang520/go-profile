@@ -54,3 +54,4 @@ go run .
 docker build -t go-profile .
 docker run -p 8080:8080 -e GITHUB_TOKEN=xxx -e DATABASE_URL=postgres://... go-profile
 ```
+test
