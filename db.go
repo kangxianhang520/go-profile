@@ -2,6 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -27,19 +30,53 @@ CREATE TABLE IF NOT EXISTS profiles (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 )`
 
-// OpenDB 连接 PostgreSQL 并确保建表
+// OpenDB 连接 PostgreSQL 并确保建表。
+// 目标库不存在时自动创建——PR 预览环境各用一个独立的库(profile_pr_N),
+// 同一 RDS 实例里多个库不额外收费,却能做到数据互不干扰。
 func OpenDB(dsn string) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return nil, err
+	db, err := open(dsn)
+	if err != nil && strings.Contains(err.Error(), "SQLSTATE 3D000") { // 库不存在
+		if err = createDatabase(dsn); err != nil {
+			return nil, fmt.Errorf("auto-create database: %w", err)
+		}
+		db, err = open(dsn)
 	}
-	if err := db.Ping(); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
 	return db, nil
+}
+
+func open(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// createDatabase 用同一实例的默认库 postgres 登录,创建连接串里指定的库
+func createDatabase(dsn string) error {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return err
+	}
+	name := strings.TrimPrefix(u.Path, "/")
+	u.Path = "/postgres"
+	admin, err := open(u.String())
+	if err != nil {
+		return err
+	}
+	defer admin.Close()
+	_, err = admin.Exec(fmt.Sprintf(`CREATE DATABASE %q`, name))
+	return err
 }
 
 // SyncProfile 拉取 GitHub 信息 → 生成介绍 → 写入数据库（存在则更新）

@@ -14,11 +14,16 @@ export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | awk '{print $2}')
 export AWS_SESSION_TOKEN=$(echo "$CREDS" | awk '{print $3}')
 echo "assumed deploy role"
 
-# ── 2. 注册任务定义:以线上 go-profile 为模板,只换镜像 ──
+# ── 2. 注册任务定义:以线上 go-profile 为模板,换镜像 + 换独立数据库 ──
+# 每个 PR 用自己的库 profile_pr_N(同一 RDS 实例内多库免费,数据互不干扰;
+# 库不存在时 Go 程序启动会自动创建)
 aws ecs describe-task-definition --task-definition go-profile \
   --query 'taskDefinition' > /tmp/base.json
 jq --arg img "$ECR_REPO:pr-$PR_NUMBER" --arg fam "go-profile-pr-$PR_NUMBER" \
+   --arg db "profile_pr_$PR_NUMBER" \
   '.family=$fam | .containerDefinitions[0].image=$img
+   | .containerDefinitions[0].environment |= map(
+       if .name=="DATABASE_URL" then .value |= sub("/[^/]*$"; "/" + $db) else . end)
    | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
   /tmp/base.json > /tmp/taskdef.json
 aws ecs register-task-definition --cli-input-json file:///tmp/taskdef.json \
