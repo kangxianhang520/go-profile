@@ -66,17 +66,24 @@ else
 fi
 echo "ecs service app-pr-$PR_NUMBER deployed"
 
-# ── 6. Cloudflare DNS:pr-N.域名 → ALB ──
-EXISTING=$(curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$HOST" \
-  | jq -r '.result[0].id // empty')
-if [ -z "$EXISTING" ]; then
-  curl -s -X POST -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-    "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
-    --data "{\"type\":\"CNAME\",\"name\":\"$HOST\",\"content\":\"$ALB_DNS\",\"proxied\":false,\"ttl\":60}" \
-    | jq '.success'
+# ── 6. Cloudflare DNS:pr-N.域名 → ALB(没配域名时跳过)──
+if [ -n "${CF_ZONE_ID:-}" ]; then
+  EXISTING=$(curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
+    "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$HOST" \
+    | jq -r '.result[0].id // empty')
+  if [ -z "$EXISTING" ]; then
+    curl -s -X POST -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+      "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+      --data "{\"type\":\"CNAME\",\"name\":\"$HOST\",\"content\":\"$ALB_DNS\",\"proxied\":false,\"ttl\":60}" \
+      | jq '.success'
+  fi
+  echo "======================================"
+  echo "预览环境已就绪: http://$HOST"
+  echo "======================================"
+else
+  echo "======================================"
+  echo "未配置 Cloudflare(CF_ZONE_ID 为空),跳过 DNS 步骤"
+  echo "临时访问方式(冒充域名的请求头):"
+  echo "  curl -H 'Host: $HOST' http://$ALB_DNS/"
+  echo "======================================"
 fi
-
-echo "======================================"
-echo "预览环境已就绪: http://$HOST"
-echo "======================================"

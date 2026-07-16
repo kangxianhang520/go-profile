@@ -31,11 +31,13 @@ TG_ARN=$(aws elbv2 describe-target-groups --names "tg-pr-$PR_NUMBER" \
 [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ] && aws elbv2 delete-target-group --target-group-arn "$TG_ARN"
 echo "target group deleted"
 
-# 4. 删 Cloudflare DNS 记录
-REC_ID=$(curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$HOST" \
-  | jq -r '.result[0].id // empty')
-[ -n "$REC_ID" ] && curl -s -X DELETE -H "Authorization: Bearer $CF_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$REC_ID" | jq '.success'
+# 4. 删 Cloudflare DNS 记录(没配域名时跳过)
+if [ -n "${CF_ZONE_ID:-}" ]; then
+  REC_ID=$(curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
+    "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$HOST" \
+    | jq -r '.result[0].id // empty')
+  [ -n "$REC_ID" ] && curl -s -X DELETE -H "Authorization: Bearer $CF_API_TOKEN" \
+    "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$REC_ID" | jq '.success'
+fi
 
 echo "pr-$PR_NUMBER 预览环境已清理完毕"
