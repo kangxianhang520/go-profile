@@ -23,7 +23,9 @@ phases:
   build:
     commands:
       - |
-        if [ "$CODEBUILD_WEBHOOK_EVENT" = "PULL_REQUEST_MERGED" ]; then
+        # 合并(MERGED)和未合并直接关闭(CLOSED)都要清理环境
+        if [ "$CODEBUILD_WEBHOOK_EVENT" = "PULL_REQUEST_MERGED" ] || \
+           [ "$CODEBUILD_WEBHOOK_EVENT" = "PULL_REQUEST_CLOSED" ]; then
           bash scripts/cleanup-pr.sh
         else
           docker build -t "$ECR_REPO:pr-$PR_NUMBER" .
