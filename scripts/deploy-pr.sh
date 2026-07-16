@@ -24,6 +24,7 @@ jq --arg img "$ECR_REPO:pr-$PR_NUMBER" --arg fam "go-profile-pr-$PR_NUMBER" \
   '.family=$fam | .containerDefinitions[0].image=$img
    | .containerDefinitions[0].environment |= map(
        if .name=="DATABASE_URL" then .value |= sub("/[^/]*$"; "/" + $db) else . end)
+   | .runtimePlatform={"cpuArchitecture":"X86_64","operatingSystemFamily":"LINUX"}
    | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
   /tmp/base.json > /tmp/taskdef.json
 aws ecs register-task-definition --cli-input-json file:///tmp/taskdef.json \
