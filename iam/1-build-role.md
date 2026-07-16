@@ -41,7 +41,28 @@
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
       "Resource": "arn:aws:iam::688567307211:role/pr-deploy-role"
+    },
+    {
+      "Sid": "UseGitHubConnection",
+      "Effect": "Allow",
+      "Action": [
+        "codeconnections:GetConnection",
+        "codeconnections:GetConnectionToken",
+        "codeconnections:UseConnection",
+        "codestar-connections:GetConnection",
+        "codestar-connections:GetConnectionToken",
+        "codestar-connections:UseConnection"
+      ],
+      "Resource": [
+        "arn:aws:codeconnections:us-east-1:688567307211:connection/88ffcccb-868e-4bdd-b73d-57c73593f9b0",
+        "arn:aws:codestar-connections:us-east-1:688567307211:connection/88ffcccb-868e-4bdd-b73d-57c73593f9b0"
+      ]
     }
   ]
 }
 ```
+
+> 踩坑记录:最后这条 UseGitHubConnection 是实战中补的——CodeBuild 通过
+> GitHub App 连接(CodeConnections)拉代码和验证 webhook,这个动作用的是
+> 项目的服务角色。漏掉它的现象:webhook 投递返回 400
+> "Access denied to connection",构建根本不触发或 DOWNLOAD_SOURCE 失败。
