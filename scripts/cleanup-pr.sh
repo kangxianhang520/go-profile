@@ -1,5 +1,6 @@
 #!/bin/bash
-# PR 合并/关闭后,拆掉它的预览环境(与 deploy-pr.sh 逆序)
+# CDK 版清理:PR 合并/关闭后,`cdk destroy` 一条命令拆掉整栈
+# ——这就是题目说的"这个 pr 被 closed 或者 merge 后就用 cdk 把这套环境删了"
 set -euo pipefail
 
 HOST="pr-${PR_NUMBER}.${DOMAIN}"
@@ -12,26 +13,16 @@ export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | awk '{print $1}')
 export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | awk '{print $2}')
 export AWS_SESSION_TOKEN=$(echo "$CREDS" | awk '{print $3}')
 
-# 1. 删 ECS 服务
-aws ecs update-service --cluster "$CLUSTER" --service "app-pr-$PR_NUMBER" \
-  --desired-count 0 >/dev/null 2>&1 || true
-aws ecs delete-service --cluster "$CLUSTER" --service "app-pr-$PR_NUMBER" \
-  --force >/dev/null 2>&1 || true
-echo "service deleted"
+# CDK 需要能合成栈才能销毁,给应用喂上占位值即可(销毁不看内容)
+export DATABASE_URL="placeholder"
+export GITHUB_TOKEN="placeholder"
 
-# 2. 删 ALB 分流规则
-RULE_ARN=$(aws elbv2 describe-rules --listener-arn "$LISTENER_ARN" \
-  --query "Rules[?Conditions[0].Values[0]=='$HOST'].RuleArn | [0]" --output text)
-[ -n "$RULE_ARN" ] && [ "$RULE_ARN" != "None" ] && aws elbv2 delete-rule --rule-arn "$RULE_ARN"
-echo "listener rule deleted"
+cd cdk
+cdk destroy "PrPreview-${PR_NUMBER}" --force
+cd ..
+echo "stack PrPreview-${PR_NUMBER} destroyed"
 
-# 3. 删目标组
-TG_ARN=$(aws elbv2 describe-target-groups --names "tg-pr-$PR_NUMBER" \
-  --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || true)
-[ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ] && aws elbv2 delete-target-group --target-group-arn "$TG_ARN"
-echo "target group deleted"
-
-# 4. 删 Cloudflare DNS 记录(没配域名时跳过)
+# 删 Cloudflare DNS 记录(没配域名时跳过)
 if [ -n "${CF_ZONE_ID:-}" ]; then
   REC_ID=$(curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
     "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$HOST" \
@@ -40,4 +31,4 @@ if [ -n "${CF_ZONE_ID:-}" ]; then
     "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$REC_ID" | jq '.success'
 fi
 
-echo "pr-$PR_NUMBER 预览环境已清理完毕"
+echo "pr-$PR_NUMBER 预览环境已全部清理"

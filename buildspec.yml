@@ -12,6 +12,12 @@ env:
     CF_API_TOKEN: /homework/cf-api-token
 
 phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+      golang: 1.22
+    commands:
+      - npm install -g aws-cdk
   pre_build:
     commands:
       # webhook 触发器形如 "pr/123",取出 PR 编号
